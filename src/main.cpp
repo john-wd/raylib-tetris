@@ -232,7 +232,9 @@ Piece Move(const Piece &piece, int dx) {
 
 Piece Rotate(const Piece &piece, int dir) {
   Piece candidate = piece;
-  candidate.rotation = (candidate.rotation + dir) % 4;
+  int rot = candidate.rotation + dir;
+  if (rot < 0) { rot += 4; }
+  candidate.rotation = rot % 4;
   if (CanPlace(candidate)) {
     return candidate;
   }
@@ -284,8 +286,8 @@ int main()
             piece = Rotate(piece, 1);
         }
         if (IsKeyPressed(KEY_Q)) {
-                    piece = Rotate(piece, -1);
-                }
+            piece = Rotate(piece, -1);
+        }
         if (IsKeyPressed(KEY_A) || IsKeyPressedRepeat(KEY_A)) {
           piece = Move(piece, -1);
         }
