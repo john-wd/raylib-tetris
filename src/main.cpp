@@ -145,6 +145,108 @@ Piece GetPiece() {
   return {idx, 0, 3, 0};
 }
 
+
+bool IsRowFull(int y) {
+    for (int x = 0; x < BOARD_W; x++) {
+        if (board[y][x] == 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void ClearLines() {
+  for (int y = 0; y < BOARD_H; y++) {
+    if (!IsRowFull(y)) {
+      continue;
+    }
+
+    // move all rows above y down by 1
+    for (int yy = y; yy > 0; yy--) {
+      for (int x = 0; x < BOARD_W; x++) {
+        board[yy][x] = board[yy-1][x];
+      }
+    }
+
+    // clear top row
+    for (int x = 0; x < BOARD_W; x++) {
+      board[0][x] = 0;
+    }
+  }
+}
+bool CanPlace(const Piece &piece) {
+  const auto& tetrimino = TETRIMINOS[piece.type].rotations[piece.rotation];
+  
+  for (int i = 0; i < 4; i++) {
+    const auto& rot = tetrimino[i];
+    int x = piece.x + rot.x;
+    int y = piece.y + rot.y;
+    
+    // check board bounds
+    if (x < 0 || x >= BOARD_W || y < 0 || y >= BOARD_H) {
+      return false;
+    }
+
+    // check board occupancy
+    if (y > 0 && board[y][x] != 0) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void Place(const Piece &piece) {
+  const auto& tetrimino = TETRIMINOS[piece.type].rotations[piece.rotation];
+  
+  for (int i = 0; i < 4; i++) {
+    const auto& rot = tetrimino[i];
+    int x = piece.x + rot.x;
+    int y = piece.y + rot.y;
+
+    board[y-1][x] = piece.type+1;
+  }
+}
+
+Piece Drop(const Piece &piece) {
+  Piece candidate = piece;
+  candidate.y++;
+  
+  while (CanPlace(candidate)) {
+      return candidate;
+  }
+  
+  Place(candidate);
+  ClearLines();
+  return GetPiece();
+}
+
+Piece Move(const Piece &piece, int dx) {
+  Piece candidate = piece;
+  candidate.x += dx;
+  if (CanPlace(candidate)) {
+    return candidate;
+  }
+  return piece;
+}
+
+Piece Rotate(const Piece &piece, int dir) {
+  Piece candidate = piece;
+  candidate.rotation = (candidate.rotation + dir) % 4;
+  if (CanPlace(candidate)) {
+    return candidate;
+  }
+  return piece;
+}
+
+void Reset() {
+  for (int i = 0; i < BOARD_H; i++) {
+    for (int j = 0; j < BOARD_W; j++) {
+      board[i][j] = 0;
+    }
+  }
+}
+
 int main()
 {
     constexpr int width = 600;
@@ -175,21 +277,24 @@ int main()
         DrawLine(0, BOARD_H*tileSize, BOARD_W*tileSize, BOARD_H*tileSize, WHITE);
         DrawLine(BOARD_W*tileSize, 0, BOARD_W*tileSize, BOARD_H*tileSize, WHITE);
 
+        Piece candidate = piece;
+
         // handle input
         if (IsKeyPressed(KEY_E)) {
-            piece.rotation = (piece.rotation + 1) % 4;
+            piece = Rotate(piece, 1);
         }
         if (IsKeyPressed(KEY_A) || IsKeyPressedRepeat(KEY_A)) {
-          piece.x -= 1;
+          piece = Move(piece, -1);
         }
         if (IsKeyPressed(KEY_D) || IsKeyPressedRepeat(KEY_D)) {
-          piece.x += 1;
+          piece = Move(piece, 1);
         }
         if (IsKeyPressed(KEY_S) || IsKeyPressedRepeat(KEY_S)) {
-          piece.y += 1;
+          piece = Drop(piece);
         }
         if (IsKeyDown(KEY_W)) { }
         if (IsKeyPressed(KEY_N)) {piece = GetPiece();}
+        if (IsKeyPressed(KEY_R)) {Reset();}
 
         for (int i = 0; i < BOARD_W; i++) {
             for (int j = 0; j < BOARD_H; j++) {
@@ -201,10 +306,9 @@ int main()
 
 
         // draw board
-
         float dt = GetFrameTime();
         if (ticker.IsTick(dt)) {
-            piece.y++;
+            piece = Drop(piece);
         };
 
         const auto& tetrimino = TETRIMINOS[piece.type];
