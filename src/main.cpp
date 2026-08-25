@@ -283,6 +283,9 @@ int main()
         if (IsKeyPressed(KEY_E)) {
             piece = Rotate(piece, 1);
         }
+        if (IsKeyPressed(KEY_Q)) {
+                    piece = Rotate(piece, -1);
+                }
         if (IsKeyPressed(KEY_A) || IsKeyPressedRepeat(KEY_A)) {
           piece = Move(piece, -1);
         }
