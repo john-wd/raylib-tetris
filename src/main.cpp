@@ -155,12 +155,14 @@ bool IsRowFull(int y) {
     return true;
 }
 
-void ClearLines() {
+void ClearLines(Sound &clearSfx) {
+    bool cleared = false;
   for (int y = 0; y < BOARD_H; y++) {
     if (!IsRowFull(y)) {
       continue;
     }
 
+    cleared = true;
     // move all rows above y down by 1
     for (int yy = y; yy > 0; yy--) {
       for (int x = 0; x < BOARD_W; x++) {
@@ -173,15 +175,18 @@ void ClearLines() {
       board[0][x] = 0;
     }
   }
+
+  if (cleared)
+    PlaySound(clearSfx);
 }
 bool CanPlace(const Piece &piece) {
   const auto& tetrimino = TETRIMINOS[piece.type].rotations[piece.rotation];
-  
+
   for (int i = 0; i < 4; i++) {
     const auto& rot = tetrimino[i];
     int x = piece.x + rot.x;
     int y = piece.y + rot.y;
-    
+
     // check board bounds
     if (x < 0 || x >= BOARD_W || y < 0 || y >= BOARD_H) {
       return false;
@@ -196,9 +201,9 @@ bool CanPlace(const Piece &piece) {
   return true;
 }
 
-void Place(const Piece &piece) {
+void Place(const Piece &piece, Sound &dropSfx) {
   const auto& tetrimino = TETRIMINOS[piece.type].rotations[piece.rotation];
-  
+
   for (int i = 0; i < 4; i++) {
     const auto& rot = tetrimino[i];
     int x = piece.x + rot.x;
@@ -206,18 +211,29 @@ void Place(const Piece &piece) {
 
     board[y-1][x] = piece.type+1;
   }
+  PlaySound(dropSfx);
 }
 
-Piece Drop(const Piece &piece) {
+Piece HardDrop(const Piece &piece, Sound &dropSfx, Sound &clearSfx) {
+  Piece candidate = piece;
+  while (CanPlace(candidate)) {
+    candidate.y++;
+  }
+  Place(candidate, dropSfx);
+  ClearLines(clearSfx);
+  return GetPiece();
+}
+
+Piece Drop(const Piece &piece, Sound &dropSfx, Sound &clearSfx) {
   Piece candidate = piece;
   candidate.y++;
-  
+
   while (CanPlace(candidate)) {
       return candidate;
   }
-  
-  Place(candidate);
-  ClearLines();
+
+  Place(candidate, dropSfx);
+  ClearLines(clearSfx);
   return GetPiece();
 }
 
@@ -257,6 +273,15 @@ int main()
     constexpr int tileSize = 32;
 
     InitWindow(width, height, "raylib Tetris");
+    InitAudioDevice();
+
+    Music music = LoadMusicStream("assets/play.wav");
+    PlayMusicStream(music);
+
+    Sound moveSfx = LoadSound("assets/sfx/move.wav");
+    Sound dropSfx = LoadSound("assets/sfx/drop.wav");
+    Sound rotateSfx = LoadSound("assets/sfx/rotate.wav");
+    Sound clearSfx = LoadSound("assets/sfx/clear.wav");
 
     SetTargetFPS(60);
 
@@ -269,6 +294,7 @@ int main()
 
     while (!WindowShouldClose())
     {
+        UpdateMusicStream(music);
         // Render
         BeginDrawing();
 
@@ -282,22 +308,26 @@ int main()
         Piece candidate = piece;
 
         // handle input
-        if (IsKeyPressed(KEY_E)) {
+        if (IsKeyPressed(KEY_K)) {
             piece = Rotate(piece, 1);
+            PlaySound(rotateSfx);
         }
-        if (IsKeyPressed(KEY_Q)) {
+        if (IsKeyPressed(KEY_J)) {
             piece = Rotate(piece, -1);
+            PlaySound(rotateSfx);
         }
         if (IsKeyPressed(KEY_A) || IsKeyPressedRepeat(KEY_A)) {
-          piece = Move(piece, -1);
+            piece = Move(piece, -1);
+            PlaySound(moveSfx);
         }
         if (IsKeyPressed(KEY_D) || IsKeyPressedRepeat(KEY_D)) {
           piece = Move(piece, 1);
+          PlaySound(moveSfx);
         }
         if (IsKeyPressed(KEY_S) || IsKeyPressedRepeat(KEY_S)) {
-          piece = Drop(piece);
+          piece = Drop(piece, dropSfx, clearSfx);
         }
-        if (IsKeyDown(KEY_W)) { }
+        if (IsKeyPressed(KEY_W)) { piece = HardDrop(piece, dropSfx, clearSfx); }
         if (IsKeyPressed(KEY_N)) {piece = GetPiece();}
         if (IsKeyPressed(KEY_R)) {Reset();}
 
@@ -313,7 +343,7 @@ int main()
         // draw board
         float dt = GetFrameTime();
         if (ticker.IsTick(dt)) {
-            piece = Drop(piece);
+            piece = Drop(piece, dropSfx, clearSfx);
         };
 
         const auto& tetrimino = TETRIMINOS[piece.type];
@@ -327,5 +357,7 @@ int main()
         EndDrawing();
     }
 
+    StopMusicStream(music);
+    CloseAudioDevice();
     CloseWindow();
 }
