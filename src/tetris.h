@@ -3,6 +3,7 @@
 #include "game.h"
 #include "util.h"
 #include <raylib.h>
+#include <raymath.h>
 #include <unordered_map>
 
 static constexpr int BOARD_W = 10;
@@ -102,18 +103,26 @@ enum class GameState {
   Playing,
   Paused,
   GameOver,
+  Title,
+};
+
+struct TitleScreen {
+    float time = 0.0f;
+    bool finishedIntro = false;
 };
 
 class TetrisGame : public Game {
 private:
   std::unordered_map<std::string, Sound> sounds;
-  Music music;
+  std::unordered_map<std::string, Music> musics;
+  Music *currentMusic;
   Ticker ticker;
   Tileset ts;
 
   Piece active;
   GameState state;
   int board[BOARD_H][BOARD_W] = {0};
+  TitleScreen title;
 
 public:
   TetrisGame(const char *title, int width = 600, int height = 800,
@@ -122,7 +131,8 @@ public:
   void Init() override {
     ticker = Ticker(1.0f);
 
-    music = LoadMusicStream("assets/play.wav");
+    musics.emplace("play", LoadMusicStream("assets/play.wav"));
+    musics.emplace("title", LoadMusicStream("assets/title.wav"));
 
     sounds.emplace("move", LoadSound("assets/sfx/move.wav"));
     sounds.emplace("drop", LoadSound("assets/sfx/drop.wav"));
@@ -133,11 +143,12 @@ public:
     ts = LoadTileset("assets/blocks.png", TILE_SIZE, TILE_SIZE);
 
     // Initialize the first piece
-    state = GameState::Playing;
+    state = GameState::Title;
     active = GetPiece();
-    PlayMusicStream(music);
+    currentMusic = &musics["title"];
+    PlayMusicStream(*currentMusic);
   };
-  void Close() override { StopMusicStream(music); }
+  void Close() override { StopMusicStream(*currentMusic); }
   void Update(float dt) override {
     switch (state) {
     case GameState::Playing:
@@ -145,6 +156,9 @@ public:
       break;
     case GameState::Paused:
       updatePaused(dt);
+      break;
+    case GameState::Title:
+      updateTitle(dt);
       break;
     }
   }
@@ -155,8 +169,69 @@ public:
         (state == GameState::Playing) ? GameState::Paused : GameState::Playing;
   }
 
+  void changeState(GameState newState) {
+    state = newState;
+  }
+
+  void changeMusic(const char *musicName) {
+    StopMusicStream(*currentMusic);
+    currentMusic = &musics[musicName];
+    PlayMusicStream(*currentMusic);
+  }
+
+  void updateTitle(float dt) {
+    UpdateMusicStream(*currentMusic);
+    title.time += dt;
+
+    if (title.time >= 2.0f)
+          title.finishedIntro = true;
+
+    if (title.finishedIntro && IsKeyPressed(KEY_E)) {
+      changeState(GameState::Playing);
+      changeMusic("play");
+    }
+
+    BeginDrawing();
+    ClearBackground(BLACK);
+    float t = Clamp(title.time / 2.0f, 0.0f, 1.0f);
+
+    // Fade in
+    unsigned char alpha =
+        static_cast<unsigned char>(255.0f * t);
+
+    Color color = Fade(WHITE, t);
+
+    // Slide from above
+    float startY = -100.0f;
+    float targetY = 150.0f;
+
+    float y = Lerp(startY, targetY, t);
+
+    DrawText(
+        "TETRIS",
+        200,
+        static_cast<int>(y),
+        80,
+        color
+    );
+
+    if (title.finishedIntro) {
+        float pulse =
+            0.5f + 0.5f * sinf(title.time * 4.0f);
+
+        DrawText(
+            "PRESS E",
+            250,
+            400,
+            24,
+            Fade(WHITE, pulse)
+        );
+    }
+    EndDrawing();
+  }
+
   void updatePaused(float dt) {
-    UpdateMusicStream(music);
+    UpdateMusicStream(*currentMusic);
     if (IsKeyPressed(KEY_E)) {
       togglePause();
     }
@@ -165,7 +240,7 @@ public:
   }
 
   void updatePlaying(float dt) {
-    UpdateMusicStream(music);
+    UpdateMusicStream(*currentMusic);
     Piece candidate = active;
 
     // handle input
